@@ -17,6 +17,9 @@ class SnappingMechanism:
         # TODO check sensitivity is positive
         # TODO check min < max and exist
 
+        # TODO: The distribution ˜ f(·) defined above satisfies (1/λ+2^{−49B}/λ)-differential privacy
+        #  when λ < B < 2^{46} · λ -- so epsilon doesn't quite mean the same thing -- how to handle this?
+
         # Compute a symmetric bound scaled to sensitivity 1 -- B in Mironov paper
         bound = (self.maximum_bound - self.minimum_bound) / 2.0
         self.B = bound / self.sensitivity
