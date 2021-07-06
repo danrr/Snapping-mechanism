@@ -17,8 +17,10 @@ class SnappingMechanism:
         # TODO check sensitivity is positive
         # TODO check min < max and exist
 
-        # TODO: The distribution ˜ f(·) defined above satisfies (1/λ+2^{−49B}/λ)-differential privacy
+        # TODO: The distribution ˜ f(·) defined above satisfies (1/λ+2^{−49}B/λ)-differential privacy
         #  when λ < B < 2^{46} · λ -- so epsilon doesn't quite mean the same thing -- how to handle this?
+        #  exp(1/λ + 12Bη/λ + 2η),
+        # TODO: do I need to check λ < B < 2^{46} · λ? throw error?
 
         # Compute a symmetric bound scaled to sensitivity 1 -- B in Mironov paper
         bound = (self.maximum_bound - self.minimum_bound) / 2.0
@@ -32,6 +34,9 @@ class SnappingMechanism:
         """
         value_scaled = value / self.sensitivity
         return value_scaled - self.B - (self.minimum_bound / self.sensitivity)
+
+    def _reverse_scale_and_offset_value(self, value):
+        return (value + self.B) * self.sensitivity + self.minimum_bound
 
     def _clamp_value(self, value):
         if value > self.B:
@@ -71,16 +76,20 @@ class SnappingMechanism:
             return value + remainder
         return value - remainder
 
+    def _sample_laplace(self):
+        sign = secrets.randbits(1) * 2.0 - 1.0
+        uniform = self._sample_uniform()
+        # Using crlibm, as mentioned in Mironov paper
+        # no need for sensitivity already scaled down to sensitivity 1
+        # todo: is this the correct log function? log_ru?
+        laplace = sign * 1.0 / self.epsilon * crlibm.log_rn(uniform)
+        return laplace
+
     def add_noise(self, value):
         if not self.minimum_bound <= value <= self.maximum_bound:
             raise ValueError(f"Value {value} not within interval [{self.minimum_bound},[{self.maximum_bound}]")
         value_scaled_offset = self._scale_and_offset_value(value)
         value_clamped = self._clamp_value(value_scaled_offset)
-        sign = secrets.randbits(1) * 2.0 - 1.0
-        uniform = self._sample_uniform()
-        # Using crlibm, as mentioned in Mironov paper
-        # todo: is this the correct log function? log_ru?
-        # no need for sensitivity already scaled down to sensitivity 1
-        laplace = sign * 1.0/self.epsilon * crlibm.log_rn(uniform)
+        laplace = self._sample_laplace()
         value_rounded = self._round_to_nearest_power_of_2(value_clamped + laplace)
-        return (self._clamp_value(value_rounded) + self.B) * self.sensitivity + self.minimum_bound
+        return self._reverse_scale_and_offset_value(self._clamp_value(value_rounded))
