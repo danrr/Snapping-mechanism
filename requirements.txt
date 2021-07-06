@@ -1,0 +1,5 @@
+numpy==1.21.0
+crlibm==1.0.3
+
+diffprivlib==0.4.1
+
