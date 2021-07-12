@@ -1,6 +1,7 @@
 import secrets
 
 import crlibm
+import numpy as np
 
 from Util import bits_to_float, float_to_bits
 
@@ -25,6 +26,10 @@ class SnappingMechanism:
         # Compute a symmetric bound scaled to sensitivity 1 -- B in Mironov paper
         bound = (self.maximum_bound - self.minimum_bound) / 2.0
         self.B = bound / self.sensitivity
+
+    def compute_real_epsilon(self):
+        machine_epsilon = np.finfo(float).epsneg
+        return self.epsilon + 12.0 * self.B * self.epsilon + machine_epsilon * 2.0
 
     def _scale_and_offset_value(self, value):
         """
