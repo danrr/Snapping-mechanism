@@ -1,23 +1,11 @@
 import numpy as np
 import diffprivlib.mechanisms.laplace as ibm_laplace
 
-from Util import bits_to_float, float_to_bits
 from SnappingMechanism.SnappingMechanism import SnappingMechanism
-
-
-# modify the bit representation
-def add_bits_float(num, add):
-    return bits_to_float(float_to_bits(num) + add)
 
 
 # Table 1 Mironov - multiples of 2^(−53)
 base_float = 2 ** -53
-
-
-def is_uniform(x):
-    # is a multiple of the base_float used for uniform sampling in numpy
-    # return x / base_float == x // base_float
-    return x % base_float == 0
 
 
 def is_base(x, y, scale):
@@ -34,11 +22,11 @@ def has_base_in_uniform(lap, scale):
 
     unscaled_lap = lap / scale
     uniform_base = np.exp(unscaled_lap)
-    search_range = 100
-    for j in range(-search_range, search_range):
-        x = add_bits_float(uniform_base, j)
-        # for all x around the search target, check if any could have been the uniformly sampled base
-        if is_base(x, lap, scale) and is_uniform(x):
+    u = uniform_base - uniform_base % base_float
+
+    for j in [0, 1]:
+        x = u + j * base_float
+        if is_base(x, lap, scale):
             return True
     return False
 
