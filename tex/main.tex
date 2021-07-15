@@ -1,12 +1,14 @@
 \documentclass[orivec,envcountsame]{llncs}
 
 \usepackage{amsfonts, amssymb}
+\usepackage{amsmath}
 \usepackage{array}
 \usepackage{booktabs}
 \usepackage[T1]{fontenc}
 \usepackage{fullpage}
 \usepackage{lmodern}
 \usepackage{graphicx}
+\usepackage{booktabs}
 \usepackage[colorlinks=true,
             citecolor=blue,
             linkcolor=blue,
@@ -35,6 +37,140 @@
 
 \pagebreak
 \section{Introduction}
+\todo{put something here}
+\section{Background}
+\subsection{Differential privacy}
+Differential privacy is a property of a mechanism for aggregate data retrieval which protects individuals' data by making any observed output of a mechanism almost as likely as the output of the mechanism if any one record is not present. Differential privacy was first introduced by Dwork et al. in 2006~\cite{dwork_calibrating_2006}.
+
+$Pure$ differential privacy or $\epsilon$-differential privacy quantifies the privacy loss to an individual with the parameter $\epsilon$, also referred to as the \textit{privacy budget}.
+
+\begin{definition}
+A randomised mechanism $M$ is said to have $\epsilon$-differential privacy if for all neighbouring databases $X$ and $Y$, and for all events $S \subseteq$ Range$(M)$, the following inequality holds:
+
+\large $$\Pr[M(X) \in S] \leq e^\epsilon * \Pr[M(Y) \in S] \footnote{$e^\epsilon \approx 1 + \epsilon$ for values of $\epsilon$ close to $0$}$$
+\end{definition}
+
+Neighbouring databases $X, Y$ are defined with respect to a distance metric $d$ as having $d(X, Y) = 1$. The distance metric is dependent on the type and structure of the data. In typical database applications where each individual's data is represented as a single row, the distance metric used is the $L_1$ distance. Two datasets are neighbours with respect to $L_1$ distance if they only differ by the inclusion or exclusion of one individual's data~\cite{dwork_calibrating_2006}. The definition of neighbours is symmetrical, therefore, the inequality in the definition of DP must hold if X and Y are swapped.
+
+\subsection{Laplace mechanism}
+
+The Laplace Mechanism is an additive mechanism for differential privacy which perturbs the result of a numerical query by sampling from a Laplace distribution parametrised by the privacy budget and the sensitivity of the query.
+
+\begin{definition}
+The sensitivity of a query $f$, with regards to a distance metric $d$ is defined as:
+\large $$\Delta(f) = \max_{X,Y}(d(f(X), f(Y)))$$
+\normalsize where $X, Y$ are neighbouring databases in the domain of $f$.
+\end{definition}
+
+When there is no need to differentiate between the sensitivity of multiple functions and the query function is clear from context, sensitivity can be denoted as just $\Delta$.
+
+\begin{definition}
+The $\epsilon$-differentially private Laplace Mechanism $M_{Lap}$ applied to a query $f: \mathcal{D} \rightarrow \mathbb{R}$ of sensitivity $\Delta$ on a database $D \in \mathcal{D}$ is given by:
+\large $$ M_{Lap}(D, f) = f(D) + X $$
+\normalsize where $X$ is sampled from the Laplace distribution with mean 0 and and scale $\frac{\Delta}{\epsilon}$.
+
+\end{definition}
+
+In practice, to sample a Laplace random variable with scale $\lambda$, the following procedure is used:
+\begin{eqnarray}
+X \leftarrow (2Z - 1) \cdot \lambda log(U) \label{eq:lap}
+\end{eqnarray}
+
+where $Z$ is a uniformly sampled bit, and $U$ is uniformly sampled from $[0, 1)$.
+
+\subsection{Floating-point vulnerability}
+Although the Laplace mechanism is correct when working with real numbers, the discrete and finite nature of computers only allows a non-uniform subset of real numbers to be represented as IEE 754 double precision floating-point numbers. \todo{cite https://standards.ieee.org/standard/754-2019.html}
+
+
+representation of the bits and how they translate to a real number
+
+the representable numbers are not evenly spaced throughout the reals. between consecutive powers of two, only $2^{52}$ double values
+
+define fat D
+
+The Laplace mechanism works if the 
+
+\cite{mironov2012significance}
+\subsection{Snapping mechanism}
+To differentiate between operations on floating-point numbers from operations on real numbers, Mironov uses the following notation: $\oplus$, $\otimes$, and $\oslash$ to represent floating-point addition, multiplication, and division respectively.
+
+\begin{definition}
+The snapping mechanism, parametrised by B and $\Lambda$, is defined by Mironov~\cite{mironov2012significance} as:
+\large $$ M_{snap}(D, f) = clamp_B(\lfloor clamp_B(f(D)) \oplus S \otimes \lambda \otimes LN(U^*)) \rceil_\Lambda) $$
+\normalsize where 
+
+$U^*$ is uniformly sampled from $\mathbb{D} \cap [0, 1)$, 
+
+$LN(x)$ is the natural logarithm implemented with exact rounding,
+
+$\lambda = \frac{1}{\epsilon}$,
+
+$\Lambda$ is the smallest power of 2 greater or equal to $\lambda$
+
+$\lfloor x \rceil_\Lambda$ rounds to the nearest multiple of $\Lambda$, with ties broken towards $+\infty$ 
+
+$clamp_B(x) =
+\begin{cases}
+    B &\quad\text{if x} > B \\
+    -B &\quad\text{if x} < -B \\
+    x &\quad\text{otherwise} \\ 
+\end{cases} 
+$
+\end{definition}
+
+The above definition assumes the sensitivity of the query is 1. If the sensitivity is not 1, the result of $f(D)$ can be scaled in proportion to the sensitivity. The proof that the snapping mechanism is differentially private can be found in Section 5.2 of \cite{mironov2012significance}.
+
+
+\section{Attack implementation}
+The implementation of the attack follows the general blueprint set out in Section 4.5 of the paper~\cite{mironov2012significance}. The attack can distinguish between values which are the result of applying the Laplace mechanism to 0 and values which are the result of applying the Laplace mechanism to any other value with high probability. This distinguisher can be applied, as described in Section 4.7 of~\cite{mironov2012significance}, to extract private information from a database which implements the Laplace mechanism for differential privacy to answer queries.
+
+The attack code was written in Python and uses the Numpy numerical library~\cite{harris2020array}, which is written in C. The uniform sampling from $[0, 1)$ in Python and Numpy only produces integer multiples of $2^{-53}$ (see \textit{Table~1} in \cite{mironov2012significance} and the \textit{RECIP\_BPF} constant in the Python built-in module \textit{random}). The attack attempts to determine if an observed output of a Laplace mechanism implementation could have been generated by applying \ref{eq:lap} to an integer multiple of $2^{-53}$ in $[0, 1)$. If a value can be found, the it is possible that the observed output was obtained by applying the Laplace mechanism to $0$; otherwise, the mechanism must have been applied to a non-zero value.
+
+The implementation works backwards from the observed output of the differentially private mechanism. It assumes that the observed output is the result of the Laplace mechanism applied to a value of 0 and, therefore, a value sampled from a Laplace distribution. For a given output value $y$ of a Laplace mechanism with scale $\lambda$, the attack starts by finding values $ u \in \mathbb{D} \cap [0, 1)$ such that $|\lambda \otimes log(u)| = |y|$. It does this by inverting the function \ref{eq:lap} used to sample Laplace variables. If the observed value $y$ is positive, its sign is set to negative. As the Laplace distribution is symmetric about its mean, this does not impact the correctness of the algorithm. This simplifies further calculations as the logarithm of sub-unitary numbers is always negative. The value is then normalised by dividing by scale $\lambda$. Finally, a candidate value $u'$ is obtained through exponentiation.
+
+$$u' = exp(-|y| \oslash \lambda)$$
+
+Due to the inaccuracies inherent to floating-point operations, even if the observed value $y$ was the result of applying the Laplace mechanism to $0$, $u'$ may not be a multiple of $2^{53}$. Therefore, to better capture possible value of $u$, the attack checks that the multiples of $2^{53}$ immediately above and below $u'$ can be used to generate $y$. The attack outputs a positive when there exists an integer multiple of $2^{53}$ in $\mathbb{D} \cap [0, 1)$ such that $|\lambda \otimes log(u)| = |y|$.
+
+The attack was tested against a simple Laplace mechanism implementation using \textit{np.random.laplace}, the histogram implementation from StatDP, the implementation of a statistical differential privacy violation detector \cite{ding_detecting_2018}, and the Laplace implementation from IMB's Diffprivlib library~\cite{diffprivlib}. In testing, the attack has always succeeded in identifying if a value was the result of applying the Laplace mechanism to 0. False positives occur at a rate of ~35-40\% when the input is $1$. The full results of testing 1,000,000 iterations of each implementation with inputs 0 and 1 can be seen in Table \ref{tab:results}.
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+& \hspace{1cm}Numpy Laplace & \hspace{1cm}StatDP histogram & \hspace{1cm}IBM Laplace \\ \midrule
+True positive for input $0$ & \multicolumn{1}{r}{1,000,000}  & \multicolumn{1}{r}{1,000,000} & \multicolumn{1}{r}{1,000,000}\\
+False positive for input $1$ & \multicolumn{1}{r}{378,608}    & \multicolumn{1}{r}{365,893}   & \multicolumn{1}{r}{377,496}  \\ \bottomrule
+\end{tabular}
+\end{center}
+\caption{Results of running 1,000,000 iterations of the attack against implementations of Laplace mechanism with input 0 and 1.} \label{tab:results}
+\end{table}
+
+\todo{chi squared - table}
+
+\section{Snapping mechanism implementation}
+% scaling to sensitivity 1.o
+% setting bounds and scaling the value to new bounds
+
+
+% sampling laplace
+% https://github.com/python/cpython/pull/22664
+% https://docs.python.org/3/library/random.html
+\cite{downey2007generating}
+
+% rounding implementation
+
+Snapping Mechanism:
+True positive: 221532/1000
+False positive: 221525/1000
+
+% include graphic
+
+\section{Future work}
+% bias?
+% variance?
+
+
+IBM
 
 \newpage
 \bibliographystyle{splncs03}
