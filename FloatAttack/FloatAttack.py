@@ -5,7 +5,9 @@ from SnappingMechanism.SnappingMechanism import SnappingMechanism
 
 
 # Table 1 Mironov - multiples of 2^(−53)
-base_float = 2 ** -53
+BASE_FLOAT = 2 ** -53
+
+NUMBER_ITERATIONS = 1_000_000
 
 
 def is_base(x, y, scale):
@@ -22,10 +24,9 @@ def has_base_in_uniform(lap, scale):
 
     unscaled_lap = lap / scale
     uniform_base = np.exp(unscaled_lap)
-    u = uniform_base - uniform_base % base_float
+    u = uniform_base - uniform_base % BASE_FLOAT
 
-    for j in [0, 1]:
-        x = u + j * base_float
+    for x in [u, u + BASE_FLOAT]:
         if is_base(x, lap, scale):
             return True
     return False
@@ -40,57 +41,57 @@ def histogram(prng, queries, epsilon):
 def attack_numpy(scale):
     print("Naive Laplace implementation using Numpy:")
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = np.random.laplace(scale=scale)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"True positive: {count}/1000")
+    print(f"True positive: {count}/{NUMBER_ITERATIONS}")
 
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = 1 + np.random.laplace(scale=scale)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"False positive: {count}/1000")
+    print(f"False positive: {count}/{NUMBER_ITERATIONS}")
 
 
 def attack_histogram(epsilon, scale):
     print("StatDP histogram implementation:")
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = histogram(np.random.default_rng(), [0, 1, 1, 1, 1], epsilon)
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"True positive: {count}/1000")
+    print(f"True positive: {count}/{NUMBER_ITERATIONS}")
 
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = histogram(np.random.default_rng(), [2, 1, 1, 1, 1], epsilon)
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"False positive: {count}/1000")
+    print(f"False positive: {count}/{NUMBER_ITERATIONS}")
 
 
 def attack_ibm(sensitivity, epsilon, scale):
     print("IBM Laplace:")
     count = 0
     laplace = ibm_laplace.Laplace(epsilon=epsilon, sensitivity=sensitivity)
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = laplace.randomise(0)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"True positive: {count}/1000")
+    print(f"True positive: {count}/{NUMBER_ITERATIONS}")
 
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = laplace.randomise(sensitivity)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"False positive: {count}/1000")
+    print(f"False positive: {count}/{NUMBER_ITERATIONS}")
 
 
 def attack_sm(sensitivity, epsilon, scale):
@@ -99,20 +100,20 @@ def attack_sm(sensitivity, epsilon, scale):
     minimum = 0.
     maximum = 100.
     sm = SnappingMechanism(minimum, maximum, epsilon, sensitivity)
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = sm.add_noise(0.)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"True positive: {count}/1000")
+    print(f"True positive: {count}/{NUMBER_ITERATIONS}")
 
     count = 0
-    for i in range(1000):
+    for i in range(NUMBER_ITERATIONS):
         result = sm.add_noise(sensitivity)
 
         if has_base_in_uniform(result, scale):
             count += 1
-    print(f"False positive: {count}/1000")
+    print(f"False positive: {count}/{NUMBER_ITERATIONS}")
 
 
 def main():
