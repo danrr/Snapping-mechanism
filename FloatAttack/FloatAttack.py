@@ -1,3 +1,5 @@
+from random import RECIP_BPF
+
 import numpy as np
 import diffprivlib.mechanisms.laplace as ibm_laplace
 
@@ -5,7 +7,7 @@ from SnappingMechanism.SnappingMechanism import SnappingMechanism
 
 
 # Table 1 Mironov - multiples of 2^(−53)
-BASE_FLOAT = 2 ** -53
+BASE_FLOAT = RECIP_BPF  # 2 ** -53
 
 NUMBER_ITERATIONS = 1_000_000
 
