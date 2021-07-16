@@ -65,19 +65,26 @@ class SnappingMechanism:
         mantissa = 1 << 52 | secrets.randbits(52)
         return math.ldexp(mantissa, exponent)
 
-    def _get_nearest_power_of_2(self, x):
+    def _get_next_power_of_2(self, x):
+        # since epsilon and sensitivity are positive, this only needs to work for x > 0
         b = float_to_bits(x)
-        if b % (1 << 52) == 0:
+        e = (b >> 52) & ((1 << 11) - 1)
+        m = b % (1 << 52)
+        if e == 0:  # subnormal, very unlikely
+            if m & (m - 1) == 0:
+                return x
+            return bits_to_float(1 << m.bit_length())
+        if m == 0:
             return x
-        return bits_to_float(((b >> 52) + 1) << 52)
+        return bits_to_float((e + 1) << 52)
 
-    def _round_to_nearest_power_of_2(self, value):
+    def _round_to_next_power_of_2(self, value):
         # Λ is the smallest power of 2 (including negative powers) greater than or equal to λ, and ⌊·⌉_Λ
         # rounds to the closest multiple of Λ in D with ties resolved towards +∞.
 
         # no need for sensitivity; already scaled down to 1
-        base = self._get_nearest_power_of_2(1.0 / self.epsilon)
-        remainder = value % base
+        base = self._get_next_power_of_2(1.0 / self.epsilon)
+        remainder = math.fmod(value, base)
         if remainder > base / 2:
             return value - remainder + base
         if remainder == base / 2:  # ties resolved towards +∞
@@ -85,12 +92,13 @@ class SnappingMechanism:
         return value - remainder
 
     def _sample_laplace(self):
-        sign = secrets.randbits(1) * 2.0 - 1.0
+        sign = secrets.randbits(1)
         uniform = self._sample_uniform()
         # Using crlibm, as mentioned in Mironov paper
         # no need for sensitivity already scaled down to sensitivity 1
-        # todo: is this the correct log function? log_ru?
-        laplace = sign * 1.0 / self.epsilon * crlibm.log_rn(uniform)
+        laplace = 1.0 / self.epsilon * crlibm.log_rn(uniform)
+        if sign:
+            return -laplace
         return laplace
 
     def add_noise(self, value):
@@ -99,5 +107,5 @@ class SnappingMechanism:
         value_scaled_offset = self._scale_and_offset_value(value)
         value_clamped = self._clamp_value(value_scaled_offset)
         laplace = self._sample_laplace()
-        value_rounded = self._round_to_nearest_power_of_2(value_clamped + laplace)
+        value_rounded = self._round_to_next_power_of_2(value_clamped + laplace)
         return self._reverse_scale_and_offset_value(self._clamp_value(value_rounded))
