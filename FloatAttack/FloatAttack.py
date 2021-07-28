@@ -2,6 +2,7 @@ from random import RECIP_BPF
 
 import numpy as np
 import diffprivlib.mechanisms.laplace as ibm_laplace
+from matplotlib import pyplot as plt
 
 from SnappingMechanism.SnappingMechanism import SnappingMechanism
 
@@ -13,7 +14,7 @@ NUMBER_ITERATIONS = 1_000_000
 
 
 def is_base(x, y, scale):
-    return scale * np.log(x) == y
+    return x and scale * np.log(x) == y
 
 
 def has_base_in_uniform(lap, scale):
@@ -116,6 +117,24 @@ def attack_sm(sensitivity, epsilon, scale):
         if has_base_in_uniform(result, scale):
             count += 1
     print(f"False positive: {count}/{NUMBER_ITERATIONS}")
+
+
+def plot_results():
+    percentage = []
+    scales = np.arange(0, 3., .01)[1:]
+    for scale in scales:
+        count = 0
+        for i in range(NUMBER_ITERATIONS):
+            result = 1 + np.random.laplace(scale=scale)
+            if has_base_in_uniform(result, scale):
+                count += 1
+        percentage.append(1.0 - count/NUMBER_ITERATIONS)
+    plt.plot(scales, percentage)
+    plt.axis([0, 3, 0, 1.02])
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.margins(x=0, y=5)
+    plt.show()
 
 
 def main():
